@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mindlin-plate-core"
+version = "0.3.0"
+description = "Automatic Kirchhoff DKQ and Reissner-Mindlin MITC4 plate core"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=1.24",
+    "fastapi>=0.110",
+    "uvicorn>=0.27",
+    "matplotlib>=3.7",
+]
+
+[project.scripts]
+mindlin-plate-api = "mindlin_plate.api:main"
+
+[project.optional-dependencies]
+test = ["httpx>=0.28"]
+
+[tool.setuptools]
+packages = ["mindlin_plate"]
+
+[tool.setuptools.package-data]
+mindlin_plate = ["templates/*.json"]

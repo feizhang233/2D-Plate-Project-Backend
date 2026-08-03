@@ -1,0 +1,2 @@
+"""Cumulative executable examples."""
+
