@@ -1,179 +1,209 @@
-# 薄板 K / 厚板 M 四边形板数学核心
+# Mindlin Plate Core & FastAPI
 
-本项目提供只依赖 NumPy、可逐步验证的四边形板有限元数学核心：
+A small, verifiable finite-element library for quadrilateral plate analysis,
+with a FastAPI service for JSON-based preprocessing, solving, result recovery,
+and PNG post-processing.
 
-- **K 方法**：离散 Kirchhoff 四边形（DKQ），用于薄板，不计横向剪切变形；
-- **M 方法**：Reissner-Mindlin Q4/MITC4，用于中厚板，计入横向剪切变形；
-- **自动方法**：根据整个板平面形状的最小跨长与厚度之比选择 K 或 M。
+The numerical core supports two compatible 4-node, three-degree-of-freedom
+plate formulations:
 
-两种方法共用自由度约定：
+- **K / DKQ** — discrete Kirchhoff quadrilateral for thin plates; transverse
+  shear deformation is not included.
+- **M / Reissner-Mindlin Q4** — a shear-deformable plate model with `full`,
+  `reduced`, and `mitc4` shear integration options.
+- **Automatic selection** — chooses K or M from the plate planform and
+  thickness, while still allowing an explicit method override.
 
-\[
-\mathbf a_i=[w_i,\theta_{xi},\theta_{yi}]^T,
+## Features
+
+- Structured rectangular meshes and custom Q4 meshes.
+- Isotropic material definition with bending and shear constitutive matrices.
+- Consistent uniform or sinusoidal transverse loads.
+- Clamped, soft simply supported, hard simply supported, and custom
+  displacement boundary conditions.
+- Element-center recovery of curvature, shear strain, moments, shear forces,
+  and top/bottom surface stresses.
+- FastAPI endpoints, OpenAPI documentation, an editable JSON request template,
+  and static PNG result artifacts.
+- Formula-, element-, and system-level regression tests.
+
+## Formulations and automatic selection
+
+Each node has the following degrees of freedom:
+
+$$
+\mathbf{a}_i = [w_i, \theta_{xi}, \theta_{yi}]^T,
 \qquad
-\boldsymbol\gamma=
-\begin{bmatrix}w_{,x}-\theta_x\\w_{,y}-\theta_y\end{bmatrix}.
-\]
+\boldsymbol{\gamma} =
+\begin{bmatrix}
+w_{,x} - \theta_x \\
+w_{,y} - \theta_y
+\end{bmatrix}.
+$$
 
-## 离散 K 方法数学核心
+The automatic selector uses the rotation-invariant minimum width of the plate
+convex hull, $L_c$, rather than an element size. Its default rule is:
 
-DKQ 不增加边中点自由度。对每条由节点 \(i,j\) 构成、长度为 \(L\) 的边，在边中点离散施加 Kirchhoff 约束。以 \(s,n\) 表示边的切向和法向：
-
-\[
-w_{,s}^{m}=\frac{3}{2L}(w_j-w_i)
--\frac14\left(w_{,s}^{i}+w_{,s}^{j}\right),
+$$
+\frac{t}{L_c} \leq \frac{1}{20} \Rightarrow \text{K (DKQ)},
 \qquad
-w_{,n}^{m}=\frac12\left(w_{,n}^{i}+w_{,n}^{j}\right).
-\]
+\frac{t}{L_c} > \frac{1}{20} \Rightarrow \text{M (MITC4)}.
+$$
 
-四个角点和四个受约束边中点的斜率使用 Q8 Serendipity 场插值，得到
+Set `plate_method` to `"K"` or `"M"` to override the selector, or adjust
+`thinness_threshold` to change the cutoff.
 
-\[
-\boldsymbol\kappa_K=
-\begin{bmatrix}w_{,xx}&w_{,yy}&2w_{,xy}\end{bmatrix}^{T}
-=\mathbf B_K\mathbf a_e,
-\qquad
-\mathbf K_K^e=\int_{A_e}\mathbf B_K^T\mathbf D_b\mathbf B_K\,dA.
-\]
+## Installation
 
-K 方法的横向剪切应变、剪力和剪切能严格为零；单元仍为 4 节点、每节点 3 自由度，可直接复用现有网格、装配、边界条件和后处理。
+Python 3.10 or later is required.
 
-## K / M 自动选择
+```bash
+git clone https://github.com/<your-account>/mindlin-plate-fastapi.git
+cd mindlin-plate-fastapi
 
-`plate_characteristic_length` 取板平面凸包的旋转不变最小宽度 \(L_c\)，因此板旋转、网格加密或长宽比变化不会误用单元尺寸作为判据。默认规则为：
+python3 -m venv .venv
+.venv/bin/python -m pip install -e '.[test]'
+```
 
-\[
-\frac{t}{L_c}\le\frac1{20}\Rightarrow K,
-\qquad
-\frac{t}{L_c}>\frac1{20}\Rightarrow M\;(\mathrm{MITC4}).
-\]
+Use `-e .` instead if you only need the library and API runtime dependencies.
 
-阈值可通过 `thinness_threshold` 调整，也可用 `plate_method="K"` 或 `plate_method="M"` 强制指定：
+## Python usage
 
 ```python
-from mindlin_plate import (
-    MindlinMaterial,
-    assemble_plate_system,
-    rectangular_mesh,
-)
+from mindlin_plate import MindlinMaterial, assemble_plate_system, rectangular_mesh
 
-mesh = rectangular_mesh(2.0, 1.0, 8, 4)
+mesh = rectangular_mesh(length_x=2.0, length_y=1.0, elements_x=8, elements_y=4)
 material = MindlinMaterial(young=210e9, poisson=0.3, thickness=0.02)
 system = assemble_plate_system(mesh, material, load=10e3)
 
 print(system.selection.method)           # "K"
 print(system.selection.thickness_ratio)  # 0.02 / 1.0
-K, f = system.stiffness, system.force
+stiffness, force = system.stiffness, system.force
 ```
 
-低层 `assemble_system` 为兼容原有调用仍默认 M 方法；传入 `plate_method="auto"` 也可启用相同的自动判据。
+`assemble_system` keeps the legacy M-method default. Use
+`assemble_system(..., plate_method="auto")` to enable the same automatic
+selection used by `assemble_plate_system`.
 
-## 9 个累计步骤
+## FastAPI service
 
-| Step | 新增数学能力 | 对应参考文档 | 累计示例 |
-|---|---|---|---|
-| 1 | Mindlin 运动学、材料矩阵、正弦载荷解析解 | 第 2-4、11 章 | `examples/step_01_continuum.py` |
-| 2 | Q4 形函数、Jacobian、\(B_b\)、原始 \(B_s\) | 第 6-7 章 | `examples/step_02_q4_kinematics.py` |
-| 3 | 弯曲/剪切刚度、一致载荷、单元能量 | 第 6.4-6.5、7.3 章 | `examples/step_03_element.py` |
-| 4 | 结构化网格、全局组装、边界条件与求解 | 第 5、10 章 | `examples/step_04_global_solver.py` |
-| 5 | 选择性减缩剪切积分与厚跨比扫描 | 第 8 章 | `examples/step_05_selective_integration.py` |
-| 6 | MITC4 协变剪切、tying points | 第 9、13 章 | `examples/step_06_mitc4.py` |
-| 7 | 弯矩、剪力、表面应力恢复与畸变网格检查 | 第 4.3、15 章 | `examples/step_07_recovery_validation.py` |
-| 8 | 自然边界载荷、对称/倾斜边及 Gauss 点恢复 | 第 5、10 章 | `examples/step_08_boundaries_postprocess.py` |
-| 9 | 全部验证闸门和 Project 完成审计 | 第 12-16 章 | `examples/step_09_complete_validation.py` |
-
-每个示例都是累计示例。例如 Step 9 会依次运行 Step 1-9 的检查，而不是只运行最终验证片段。
-
-## 运行
+Start the local API server:
 
 ```bash
-python3 examples/step_01_continuum.py
-python3 examples/step_09_complete_validation.py
-python3 -m unittest discover -s tests -v
-```
-
-如需使用指定 Python：
-
-```bash
-/path/to/python3 examples/step_09_complete_validation.py
-```
-
-## FastAPI 服务
-
-HTTP 服务把网格前处理、K/M 数学核心、边界约束、线性求解、结果恢复和 PNG
-后处理串成一次请求。安装并启动：
-
-```bash
-python3 -m venv .venv
-.venv/bin/python -m pip install -e .
 .venv/bin/mindlin-plate-api
 ```
 
-启动后可访问：
+The default server address is `http://127.0.0.1:8000`. Open the interactive
+API documentation at `http://127.0.0.1:8000/docs`.
 
-- Swagger UI：`http://127.0.0.1:8000/docs`
-- 健康检查：`GET /health`
-- 前处理模板：`GET /api/v1/templates/rectangular-plate`
-- 提交计算：`POST /api/v1/analyses`
-- 查询本进程内的结果：`GET /api/v1/analyses/{analysis_id}`
-- 后处理图像：响应中 `images[].url` 指向 PNG 静态文件
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /health` | Health check. |
+| `GET /api/v1/templates/rectangular-plate` | Returns the editable request template. |
+| `POST /api/v1/analyses` | Runs an analysis and creates PNG artifacts. |
+| `GET /api/v1/analyses/{analysis_id}` | Returns an analysis created by the current server process. |
 
-可直接提交随包提供的前处理模板
-[`mindlin_plate/templates/rectangular_plate.json`](mindlin_plate/templates/rectangular_plate.json)：
+The request template is also available in the repository at
+[`mindlin_plate/templates/rectangular_plate.json`](mindlin_plate/templates/rectangular_plate.json).
 
 ```bash
-curl -s http://127.0.0.1:8000/api/v1/templates/rectangular-plate \
-  > plate.json
+curl -s http://127.0.0.1:8000/api/v1/templates/rectangular-plate -o plate.json
+
 curl -s -X POST http://127.0.0.1:8000/api/v1/analyses \
   -H 'Content-Type: application/json' \
   --data-binary @plate.json \
-  > result.json
+  -o result.json
 ```
 
-前处理支持矩形结构网格和自定义 `nodes/elements` Q4 网格，均布或正弦分布面荷载，
-固支、软简支、硬简支或自定义自由度约束。`plate_method` 可选 `auto/K/M`；
-M 方法的 `shear_scheme` 可选 `full/reduced/mitc4`。单位字段仅作记录，所有输入仍须使用
-同一套自洽单位。
+`POST /api/v1/solve` is retained as an undocumented alias for
+`POST /api/v1/analyses`.
 
-响应包含计算摘要、节点位移/转角/反力、单元中心曲率/弯矩/剪力/上下表面应力，
-并可生成以下图像：
+### Request model
 
-- `deflection.png`：节点横向挠度云图；
-- `rotation.png`：转角合量云图；
-- `moment.png`：单元中心弯矩合量图；
-- `stress_top.png`：上表面等效弯曲应力图。
+The JSON body contains the following top-level objects:
 
-默认图片目录为 `outputs/plate-analyses`。部署时可用
-`MINDLIN_PLATE_OUTPUT_DIR`、`MINDLIN_PLATE_HOST` 和 `MINDLIN_PLATE_PORT`
-修改输出路径、监听地址和端口。由于当前核心使用教学用途的稠密矩阵，服务层将单次任务限制为
-2500 个自由度。
+| Field | Description |
+| --- | --- |
+| `mesh` | A `rectangular` mesh (`length_x`, `length_y`, `elements_x`, `elements_y`) or a `custom` mesh (`nodes`, `elements`). |
+| `material` | `young`, `poisson`, `thickness`, and optional `shear_correction`. |
+| `load` | A `uniform` or `sinusoidal` transverse distributed load with `magnitude`. |
+| `boundary` | `clamped`, `soft_simply_supported`, `hard_simply_supported`, or `custom` with `prescribed_dofs`. |
+| `analysis` | `plate_method`, `shear_scheme`, and `thinness_threshold`. |
+| `postprocess` | Requested plots and PNG `dpi`. |
 
-## 核心约定
+The response contains the formulation decision, equilibrium summary, nodal
+displacements and reactions, element-center recovered fields, and artifact
+URLs. Generated images are served under `/artifacts/<analysis_id>/`.
 
-- Q4 节点顺序：左下、右下、右上、左上；所有积分点都要求 `det(J) > 0`。
-- 弯曲使用 \(2\times2\) Gauss 积分。
-- `full`：原始剪切场使用 \(2\times2\) 积分，是会剪切锁死的基线。
-- `reduced`：原始剪切场使用中心单点积分。
-- `mitc4`：在四个 tying points 对协变剪切分量插值，再用 \(2\times2\) 积分。
-- `K` / `dkq`：离散 Kirchhoff 薄板，仅积分弯曲刚度，使用 \(2\times2\) Gauss 积分。
-- 单点 `reduced` 单元保留两个额外零能模态，仅作为锁死机理基线；正式方案使用通过零模态检查的 `mitc4`。
-- 自然边界支持 \([\bar V,\bar m_x,\bar m_y]\)，倾斜边通过局部正交基底施加约束。
-- 代码只构造数学方程；单位必须由调用者保持一致。
+### Post-processing images
 
-## 目录
+Choose any subset of the following values in `postprocess.plots`:
 
-- `mindlin_plate/kirchhoff.py`：DKQ 斜率插值、边约束和曲率矩阵。
-- `mindlin_plate/theory.py`：板形状特征长度与 K/M 自动判据。
-- `mindlin_plate/` 其余模块：材料、M 方法、装配、边界和后处理。
-- `examples/`：9 个累计示例和共用检查器。
-- `tests/`：公式级、单元级和全局级回归测试。
+- `deflection` — transverse deflection contour.
+- `rotation` — rotation magnitude contour.
+- `moment` — element-center bending resultant magnitude.
+- `stress_top` — top-surface equivalent bending stress.
 
-## 完成标准对应
+Artifacts are written to `outputs/plate-analyses` by default. Configure the
+runtime with these environment variables when needed:
 
-- 完整积分 Q4 基准：`shear_scheme="full"`，可重现剪切锁死。
-- 稳定厚薄板方案：`shear_scheme="mitc4"`，自由单元只有 3 个物理刚体零模态。
-- Patch tests：刚体、纯扭曲、常剪切和参考纯弯模式均已自动化。
-- 薄板极限：固定网格扫描 \(t/L=10^{-1},10^{-2},10^{-3},10^{-4}\)。
-- 网格畸变：检查全部 Gauss 点 `det(J)>0`，并量化规则/畸变网格结果变化。
-- 输出：节点撓度/转角、曲率、弯矩、剪力、上下表面弯曲应力和抛物线剪应力恢复。
-- 边界：固支、软/硬简支、对称边、倾斜边局部自由度及分布边界剪力/弯矩。
+- `MINDLIN_PLATE_OUTPUT_DIR`
+- `MINDLIN_PLATE_HOST`
+- `MINDLIN_PLATE_PORT`
+
+## Modelling notes
+
+- Q4 nodes must be ordered counter-clockwise: lower-left, lower-right,
+  upper-right, upper-left.
+- The Jacobian determinant must be positive at all integration points.
+- Bending is integrated with a $2 \times 2$ Gauss rule.
+- `full` uses a $2 \times 2$ rule for the raw shear field and intentionally
+  reproduces shear locking as a baseline.
+- `reduced` uses one-point raw-shear integration and retains two extra
+  zero-energy modes; use it only as a locking reference.
+- `mitc4` interpolates covariant shear from four tying points and is the
+  recommended M-method option.
+- DKQ has zero transverse shear strain, shear force, and shear energy.
+- The HTTP service uses a dense global stiffness matrix and limits each
+  request to 2,500 degrees of freedom.
+- Inputs must use one consistent system of units. The API `units` object is
+  metadata only; it does not convert values.
+
+## Verification and examples
+
+Run the complete test suite:
+
+```bash
+.venv/bin/python -m unittest discover -s tests -v
+```
+
+The `examples/` directory contains nine cumulative scripts. Each later step
+reruns the checks from all preceding steps.
+
+| Step | Added capability | Script |
+| --- | --- | --- |
+| 1 | Mindlin kinematics, material matrices, and sinusoidal reference solution | `examples/step_01_continuum.py` |
+| 2 | Q4 shape functions, Jacobian, bending, and raw shear matrices | `examples/step_02_q4_kinematics.py` |
+| 3 | Element stiffness, consistent loading, and energy | `examples/step_03_element.py` |
+| 4 | Structured mesh, global assembly, constraints, and solve | `examples/step_04_global_solver.py` |
+| 5 | Selective reduced integration and thickness scan | `examples/step_05_selective_integration.py` |
+| 6 | MITC4 covariant shear and tying points | `examples/step_06_mitc4.py` |
+| 7 | Moment, shear, stress recovery, and distorted-mesh checks | `examples/step_07_recovery_validation.py` |
+| 8 | Natural edge loads, symmetry, inclined edges, and Gauss-point recovery | `examples/step_08_boundaries_postprocess.py` |
+| 9 | Complete validation audit | `examples/step_09_complete_validation.py` |
+
+## Project layout
+
+```text
+mindlin_plate/
+  assembly.py       Global assembly and Dirichlet solver
+  element.py        Q4, MITC4, and DKQ element operations
+  theory.py         Planform characteristic length and K/M selection
+  postprocess.py    Field recovery
+  service.py        JSON-like input to core-analysis adapter
+  plotting.py       Headless PNG rendering
+  api.py            FastAPI application
+  templates/        Request templates
+examples/           Incremental validation examples
+tests/              Regression tests
+```
