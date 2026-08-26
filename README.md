@@ -4,6 +4,16 @@ A small, verifiable finite-element library for quadrilateral plate analysis,
 with a FastAPI service for JSON-based preprocessing, solving, result recovery,
 and PNG post-processing.
 
+## Interview study guide (中文)
+
+如果目的是准备博士面试，而不是立即阅读实现细节，请从
+[`START_HERE_博士面试.md`](START_HERE_博士面试.md) 开始。配套材料包括：
+
+- [`docs/博士面试_数学核心速览.md`](docs/博士面试_数学核心速览.md)：用一条主线理解本项目的数学核心。
+- [`docs/博士面试_高频问答.md`](docs/博士面试_高频问答.md)：用于口头复述和自测。
+- [`docs/README.md`](docs/README.md)：项目文件地图和分层学习路线。
+- [`output/pdf/README.md`](output/pdf/README.md)：两份完整算例 PDF 的区别和使用方式。
+
 The numerical core supports two compatible 4-node, three-degree-of-freedom
 plate formulations:
 
