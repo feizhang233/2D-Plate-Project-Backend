@@ -5,6 +5,8 @@
 
 | 文件 | 适合场景 |
 | --- | --- |
+| [`PhD_Interview_Plate_FEM_Questions_and_Worked_Example_EN.pdf`](PhD_Interview_Plate_FEM_Questions_and_Worked_Example_EN.pdf) | Complete English edition: 28 interview questions, detailed worked solution, and numerical verification |
+| [`博士面試_數學核心問題與泛用例題詳解.pdf`](博士面試_數學核心問題與泛用例題詳解.pdf) | 28 个面试问题及一道贯通运动学、能量、解析解、有限元和验证的详细例题 |
 | [`plate_core_two_complete_examples_zh.pdf`](plate_core_two_complete_examples_zh.pdf) | 快速了解两个算例从输入到后处理的完整流程 |
 | [`plate_core_two_complete_examples_detailed_derivation_zh.pdf`](plate_core_two_complete_examples_detailed_derivation_zh.pdf) | 需要逐公式、数值代入、收敛、平衡和应力恢复细节时使用 |
 

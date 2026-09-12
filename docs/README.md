@@ -9,6 +9,8 @@
 | [`../START_HERE_博士面试.md`](../START_HERE_博士面试.md) | 总入口；先建立一分钟整体认识 |
 | [`博士面试_数学核心速览.md`](博士面试_数学核心速览.md) | 理解数学链、两种板理论和数值难点 |
 | [`博士面试_高频问答.md`](博士面试_高频问答.md) | 练习口头表达并检查是否真正理解 |
+| [`博士面試_數學核心問題與泛用例題詳解.md`](博士面試_數學核心問題與泛用例題詳解.md) | 28 个面试问题、正弦荷载简支板的完整推导及实际有限元核对 |
+| [`PhD_Interview_Plate_FEM_Questions_and_Worked_Example_EN.md`](PhD_Interview_Plate_FEM_Questions_and_Worked_Example_EN.md) | Complete English edition of the interview questions and detailed worked example |
 
 ## 第二层：看完整问题如何走通
 
